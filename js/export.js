@@ -35,7 +35,7 @@ export function buildSVG(state, scope) {
   o.push('<g id="openings" fill="none">');
   for (const op of OPENINGS) {
     const line = (a, b, off, st, w) => op.axis === 'x' ? `<line x1="${k(a)}" y1="${k(op.at + off)}" x2="${k(b)}" y2="${k(op.at + off)}" stroke="${st}" stroke-width="${w}"/>` : `<line x1="${k(op.at + off)}" y1="${k(a)}" x2="${k(op.at + off)}" y2="${k(b)}" stroke="${st}" stroke-width="${w}"/>`;
-    if (op.kind === 'window') { o.push(line(op.a, op.b, -0.05, '#3b8fbf', 2), line(op.a, op.b, 0.05, '#3b8fbf', 2), line(op.a, op.b, 0, '#3b8fbf', 1)); }
+    if (op.kind === 'window' || op.kind === 'fixed') { o.push(line(op.a, op.b, -0.05, '#3b8fbf', 2), line(op.a, op.b, 0.05, '#3b8fbf', 2), line(op.a, op.b, 0, '#3b8fbf', 1)); }
     if (op.kind === 'slide') { const m = (op.a + op.b) / 2; o.push(line(op.a, m + 0.1, -0.03, '#3b8fbf', 3), line(m - 0.1, op.b, 0.03, '#3b8fbf', 3)); }
     if (op.kind === 'door') {
       const L = op.b - op.a, h = op.hinge === 'a' ? op.a : op.b, far = op.hinge === 'a' ? op.b : op.a;
@@ -56,7 +56,7 @@ export function buildSVG(state, scope) {
   // room labels
   o.push('<g id="room-labels" text-anchor="middle" fill="#8a6420">');
   for (const r of ROOMS) {
-    if (room && r !== room) continue;
+    if ((room && r !== room) || (!room && r.noLabel)) continue;
     const cx = k((r.r[0] + r.r[2]) / 2), cz = k((r.r[1] + r.r[3]) / 2), fs = room ? 18 : Math.max(9, Math.min(20, k(r.r[2] - r.r[0]) / 9));
     o.push(`<text x="${cx}" y="${cz - fs * 0.2}" font-size="${fs}" font-weight="700" opacity=".5">${esc(r.id + ' · ' + r.name.toUpperCase())}</text><text x="${cx}" y="${cz + fs}" font-size="${fs * 0.75}" opacity=".5">${esc(r.dim)}</text>`);
   }

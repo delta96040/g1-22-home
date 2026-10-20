@@ -16,16 +16,17 @@ export const ROOMS = [
   { id: '16', name: 'Dress', dim: '2.41 × 2.18 m', r: [0.3, 4.42, 2.71, 6.6], floor: 'wood', walls: true },
   { id: '15', name: 'Bedroom', dim: '3.65 × 4.63 m', r: [2.75, 2.0, 6.4, 6.63], floor: 'wood', walls: true },
   { id: '18', name: 'Bedroom', dim: '3.76 × 4.56 m', r: [6.44, 2.0, 10.2, 6.56], floor: 'wood', walls: true },
-  { id: '6', name: 'Dress + Toilet', dim: '2.48 × 3.65 m', r: [0.3, 6.75, 2.78, 10.4], floor: 'tile', walls: true, paint: '#e9ece9' },
+  { id: '6', name: 'Dress + Toilet', dim: '2.48 × 3.65 m · of Bed 5', r: [0.3, 6.75, 2.78, 10.4], floor: 'tile', walls: true, paint: '#e9ece9' },
   { id: '3', name: 'Lounge', dim: '4.55 × 3.63 m', r: [2.93, 6.72, 7.15, 10.35], floor: null, open: true },
-  { id: '19', name: 'Dress + Toilet', dim: '2.91 × 3.65 m', r: [7.29, 6.7, 10.2, 10.35], floor: 'tile', walls: true, paint: '#e9ece9' },
+  { id: '19', name: 'Dress + Toilet', dim: '2.91 × 3.65 m · of Bed 18', r: [7.29, 6.7, 10.2, 10.35], floor: 'tile', walls: true, paint: '#e9ece9' },
   { id: '5', name: 'Bedroom', dim: '3.81 × 3.90 m', r: [0.3, 10.57, 4.11, 14.47], floor: 'stone', walls: true },
   { id: '2', name: 'Staircase', dim: '3.70 × 4.08 m', r: [6.5, 10.5, 10.2, 14.58], floor: 'granite', walls: true, stairs: true },
-  { id: '8', name: 'O.T.S.', dim: '3.81 × 2.14 m', r: [0.3, 14.62, 4.11, 16.76], floor: 'pebble', walls: true, sky: true },
+  { id: '8', name: 'O.T.S.', dim: '3.81 × 2.14 m · AC duct shaft', r: [0.3, 14.62, 4.11, 16.76], floor: 'pebble', walls: true, sky: true },
   { id: '1', name: 'Lift', dim: '1.50 × 1.83 m', r: [8.6, 14.75, 10.1, 16.58], floor: 'steel', walls: true, paint: '#b9bfc2' },
   { id: '7', name: 'Dining', dim: '5.81 × 4.55 m', r: [4.26, 14.62, 8.45, 19.25], floor: null, open: true },
-  { id: '14', name: 'Toilet', dim: '1.68 × 2.45 m', r: [0.3, 16.9, 1.98, 19.35], floor: 'tile', walls: true, paint: '#e9ece9' },
-  { id: '9', name: 'Powder Room', dim: '2.01 × 2.17 m', r: [2.1, 16.9, 4.11, 19.07], floor: 'tile', walls: true, paint: '#e9ece9' },
+  { id: '14', name: 'Toilet', dim: '1.68 × 2.45 m · of Guest Bed', r: [0.3, 16.9, 1.98, 19.35], floor: 'tile', walls: true, paint: '#e9ece9' },
+  { id: '9', name: 'Powder Room', dim: '2.01 × 2.17 m', r: [2.1, 16.9, 4.11, 18.45], floor: 'tile', walls: true, paint: '#e9ece9' },
+  { id: '13L', name: 'Guest lobby', dim: 'closet · entry to 13', r: [2.1, 18.6, 4.11, 19.43], floor: 'stone', walls: true, noLabel: true },
   { id: '13', name: 'Guest Bedroom', dim: '3.36 × 4.15 m', r: [0.3, 19.5, 3.66, 23.65], floor: 'stone', walls: true },
   { id: '10', name: 'Drawing Room', dim: '2.67 × 4.27 m', r: [3.81, 19.38, 7.53, 23.65], floor: 'stone', walls: true },
   { id: '11', name: 'Kitchen', dim: '2.52 × 4.27 m', r: [7.68, 19.38, 10.2, 23.65], floor: 'ktile', walls: true, paint: '#eeeae2' },
@@ -47,16 +48,18 @@ export const OPENINGS = [
   { axis: 'x', at: 6.63, a: 5.45, b: 6.35, kind: 'door', hinge: 'b', swing: -1 },
   // bedroom 18
   { axis: 'x', at: 6.56, a: 6.5, b: 7.25, kind: 'door', hinge: 'a', swing: -1 },
-  // 6 and 19
-  { axis: 'z', at: 2.78, a: 9.3, b: 10.1, kind: 'door', hinge: 'b', swing: -1 },
-  { axis: 'z', at: 7.29, a: 9.3, b: 10.1, kind: 'door', hinge: 'b', swing: 1 },
+  // 6 is reached from bedroom 5; 19 from bedroom 18
+  { axis: 'x', at: 10.485, a: 1.6, b: 2.4, kind: 'door', hinge: 'a', swing: 1 },
+  { axis: 'x', at: 6.63, a: 8.6, b: 9.4, kind: 'door', hinge: 'b', swing: 1 },
   // bedroom 5, OTS glass
   { axis: 'z', at: 4.11, a: 10.8, b: 11.65, kind: 'door', hinge: 'a', swing: -1 },
-  { axis: 'z', at: 4.11, a: 14.85, b: 16.5, kind: 'slide' },
+  { axis: 'z', at: 4.11, a: 14.85, b: 16.5, kind: 'fixed' },
   // powder room, toilet 14, guest bedroom
-  { axis: 'z', at: 4.11, a: 17.85, b: 18.65, kind: 'door', hinge: 'a', swing: -1 },
+  { axis: 'z', at: 4.11, a: 17.35, b: 18.1, kind: 'door', hinge: 'a', swing: -1 },
   { axis: 'x', at: 19.42, a: 0.8, b: 1.55, kind: 'door', hinge: 'a', swing: 1 },
-  { axis: 'x', at: 19.5, a: 2.45, b: 3.3, kind: 'door', hinge: 'b', swing: 1 },
+  // guest lobby: door from the dining side, closet ahead, turn left into bedroom 13
+  { axis: 'z', at: 4.11, a: 18.68, b: 19.36, kind: 'door', hinge: 'a', swing: -1 },
+  { axis: 'x', at: 19.47, a: 2.75, b: 3.55, kind: 'gap' },
   // south sliders to balcony 12
   { axis: 'x', at: 23.65, a: 0.8, b: 3.1, kind: 'slide' },
   { axis: 'x', at: 23.65, a: 4.3, b: 7.0, kind: 'slide' },

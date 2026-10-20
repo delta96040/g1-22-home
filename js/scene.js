@@ -218,6 +218,7 @@ export function buildWalls(mode, paints = {}, view = null) {
     const oh = mode === 'auto' ? (openH.get(o) || LOW) : H;
     if (o.kind === 'window' && mode !== 'off') addWindow(g, o, oh);
     if (o.kind === 'slide' && mode !== 'off') addSlider(g, o, oh);
+    if (o.kind === 'fixed' && mode !== 'off') addFixed(g, o, oh);
     if (o.kind === 'door') addDoor(g, o, oh >= 2.5 ? 'full' : mode === 'off' ? 'off' : 'low');
     if (o.liftDoor && mode !== 'off') addLiftDoor(g, o, oh);
   }
@@ -247,6 +248,13 @@ function addSlider(g, o, H) {
     for (const [len, hh, a2, y] of [[pw, 0.05, al, 0.025], [pw, 0.05, al, top - 0.025], [0.045, top, al - pw / 2 + 0.022, top / 2], [0.045, top, al + pw / 2 - 0.022, top / 2]]) {
       const f = new THREE.Mesh(box(o, len, hh, 0.04), frameMat); placeAlong(o, f, a2, y, across); g.add(f);
     }
+  }
+}
+function addFixed(g, o, H) {
+  const top = Math.min(WALL_H, H), L = o.b - o.a, mid = (o.a + o.b) / 2;
+  const gl = new THREE.Mesh(box(o, L, top, 0.012), glassMat); placeAlong(o, gl, mid, top / 2); g.add(gl);
+  for (const [len, hh, al, y] of [[L, 0.05, mid, 0.025], [L, 0.05, mid, top - 0.025], [0.05, top, o.a + 0.025, top / 2], [0.05, top, o.b - 0.025, top / 2]]) {
+    const f = new THREE.Mesh(box(o, len, hh, 0.05), frameMat); placeAlong(o, f, al, y); g.add(f);
   }
 }
 function addDoor(g, o, mode) {
@@ -322,7 +330,9 @@ function buildFixtures() {
     }
     if (r.sky) {
       const [x0, z0, x1, z1] = r.r;
-      for (let k = 0; k < 5; k++) { const x = x0 + 0.3 + k * (x1 - x0 - 0.6) / 4; const c = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 2.6, 6), new THREE.MeshStandardMaterial({ color: '#7a8f4a' })); c.position.set(x, 1.3, z0 + 0.3); c.castShadow = true; g.add(c); const s = new THREE.Mesh(new THREE.IcosahedronGeometry(0.3, 1), leaf); s.position.set(x, 2.5, z0 + 0.3); g.add(s); }
+      const pipe = new THREE.MeshStandardMaterial({ color: '#c9ccce', roughness: 0.4, metalness: 0.5 });
+      for (let k = 0; k < 4; k++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 3.0, 12), pipe); c.position.set(x0 + 0.25 + k * 0.16, 1.5, z0 + 0.2); c.castShadow = true; g.add(c); }
+      for (let k = 0; k < 2; k++) { const u = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.6, 0.32), new THREE.MeshStandardMaterial({ color: '#e8e8e6', roughness: 0.5 })); u.position.set(x0 + 1.6 + k * 1.0, 0.32, z0 + 0.25); u.castShadow = true; g.add(u); const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 24), new THREE.MeshStandardMaterial({ color: '#333' })); fan.rotation.x = Math.PI / 2; fan.position.set(x0 + 1.5 + k * 1.0, 0.32, z0 + 0.42); g.add(fan); }
     }
   }
 }

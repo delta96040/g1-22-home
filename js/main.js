@@ -68,7 +68,7 @@ function seed() {
   add('fridgeDD', 9.77, 23.13, -R / 2); add('kHood', 9.905, 21.75, -R / 2); add('kUpper', 9.955, 19.95, -R / 2); add('kUpper2', 9.955, 20.55, -R / 2);
   add('micro', 9.85, 22.35, -R / 2, { y: 0.9 });
   // Bathrooms
-  add('wc', 2.51, 17.6, R / 2); add('vanity', 3.5, 17.245, 0);
+  add('wc', 2.51, 17.55, R / 2); add('vanity', 3.5, 17.245, 0); add('cupboard', 2.395, 19.015, R / 2, { w: 0.82 });
   add('shower', 0.82, 2.52, 0); add('wc', 0.71, 3.6, R / 2); add('vanity', 1.95, 2.345, 0);
   add('wc', 0.71, 18.6, R / 2); add('basin', 1.5, 17.195, 0);
   // Hall & balconies
@@ -121,7 +121,7 @@ const groupOf = it => it.g ? state.items.filter(i => i.g === it.g) : [it];
 
 /* ======================= labels overlay ======================= */
 const overlay = $('#labels');
-const roomLabels = ROOMS.map(r => {
+const roomLabels = ROOMS.filter(r => !r.noLabel).map(r => {
   const el = document.createElement('div'); el.className = 'rlabel';
   el.innerHTML = `<i>${r.id}</i><b>${r.name}</b><span>${r.dim}</span>`; el.title = `${r.id} · ${r.name} · ${r.dim}`;
   el.onclick = () => focusRoom(r.id);
@@ -442,7 +442,7 @@ function focusRoom(id) {
 const walk = { yaw: 0, pitch: 0, keys: {}, joy: null, look: null, pos: new THREE.Vector3() };
 function enterWalk() {
   select(null); setCamera('orbit'); W.orbit.enabled = false; rebuildWalls(); W.ceiling.visible = true;
-  const r = focusedRoom && focusedRoom.id !== '1' ? focusedRoom : ROOMS.find(q => q.id === '3');
+  const r = focusedRoom && focusedRoom.id !== '1' && !focusedRoom.sky ? focusedRoom : ROOMS.find(q => q.id === '3');
   walk.pos.set((r.r[0] + r.r[2]) / 2, 1.6, (r.r[1] + r.r[3]) / 2); walk.yaw = Math.PI; walk.pitch = 0;
   W.persp.fov = 65; W.persp.updateProjectionMatrix();
   stage.classList.add('walking'); $('#walkUI').hidden = false;
@@ -462,6 +462,12 @@ function collides(x, z) {
     const [ax0, ax1, az0, az1] = p.axis === 'x' ? [p.a, p.b, p.fixed - h, p.fixed + h] : [p.fixed - h, p.fixed + h, p.a, p.b];
     if (x > ax0 - r && x < ax1 + r && z > az0 - r && z < az1 + r) return true;
   }
+  for (const o of OPENINGS) {
+    if (o.kind !== 'fixed' && o.kind !== 'window') continue;
+    const [ax0, ax1, az0, az1] = o.axis === 'x' ? [o.a, o.b, o.at - 0.1, o.at + 0.1] : [o.at - 0.1, o.at + 0.1, o.a, o.b];
+    if (x > ax0 - r && x < ax1 + r && z > az0 - r && z < az1 + r) return true;
+  }
+  const ots = ROOMS.find(q => q.sky); if (ots && x > ots.r[0] && x < ots.r[2] && z > ots.r[1] && z < ots.r[3]) return true;
   return x < 0.1 || x > 10.4 || z < 0.1 || z > 25.65;
 }
 function stepWalk(dt) {
