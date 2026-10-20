@@ -68,7 +68,7 @@ function seed() {
   add('fridgeDD', 9.77, 23.13, -R / 2); add('kHood', 9.905, 21.75, -R / 2); add('kUpper', 9.955, 19.95, -R / 2); add('kUpper2', 9.955, 20.55, -R / 2);
   add('micro', 9.85, 22.35, -R / 2, { y: 0.9 });
   // Bathrooms
-  add('wc', 2.51, 17.55, R / 2); add('vanity', 3.5, 17.245, 0); add('cupboard', 2.395, 19.015, R / 2, { w: 0.82 });
+  add('wc', 2.51, 17.55, R / 2); add('vanity', 3.5, 17.245, 0);
   add('shower', 0.82, 2.52, 0); add('wc', 0.71, 3.6, R / 2); add('vanity', 1.95, 2.345, 0);
   add('wc', 0.71, 18.6, R / 2); add('basin', 1.5, 17.195, 0);
   // Hall & balconies

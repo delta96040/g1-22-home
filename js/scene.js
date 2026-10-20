@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ROOMS, HALL, OPENINGS, WALL_H, DOOR_H, CENTER, PLOT, STAIR, buildWallPieces } from './plan.js';
+import { ROOMS, HALL, OPENINGS, BUILTINS, WALL_H, DOOR_H, CENTER, PLOT, STAIR, buildWallPieces } from './plan.js';
 
 export const W = {};   // the world: renderer, scene, cameras, controls, groups
 
@@ -284,7 +284,12 @@ function addDoor(g, o, mode) {
   if (o.axis === 'x') rot = o.hinge === 'a' ? -o.swing * ang : o.swing * ang;
   else rot = o.hinge === 'a' ? o.swing * ang : -o.swing * ang;
   pivot.rotation.y = rot; g.add(pivot);
+  // swing arc drawn on the floor so doors read clearly from above
+  const pts = []; for (let i = 0; i <= 16; i++) { const t = rot * i / 16; const v = o.axis === 'x' ? new THREE.Vector3(dir * L * Math.cos(t), 0.012, -dir * L * Math.sin(t)) : new THREE.Vector3(dir * L * Math.sin(t), 0.012, dir * L * Math.cos(t)); pts.push(v); }
+  const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), arcMat); arc.computeLineDistances(); placeAlong(o, arc, hingeAt, 0); g.add(arc);
+  if (mode !== 'full') { const flat = new THREE.Mesh(o.axis === 'x' ? new THREE.BoxGeometry(L, 0.02, 0.05) : new THREE.BoxGeometry(0.05, 0.02, L), leafMat); if (o.axis === 'x') flat.position.set(dir * L / 2, 0.01, 0); else flat.position.set(0, 0.01, dir * L / 2); pivot.add(flat); }
 }
+const arcMat = new THREE.LineDashedMaterial({ color: '#7a5233', dashSize: 0.06, gapSize: 0.04 });
 function addLiftDoor(g, o, H) {
   const top = Math.min(DOOR_H, H), L = o.b - o.a;
   const steel = new THREE.MeshStandardMaterial({ color: '#b8bec2', roughness: 0.25, metalness: 0.9 });
@@ -321,6 +326,18 @@ function buildFixtures() {
   buildRoomFixtures(W.groups.fixtures);
 }
 function buildRoomFixtures(g) {
+  // built-in closets
+  const body = new THREE.MeshStandardMaterial({ color: '#e6dfd2', roughness: 0.6 }), line = new THREE.MeshStandardMaterial({ color: '#8f8778' }), knob = new THREE.MeshStandardMaterial({ color: '#c9c3b6', metalness: 0.9, roughness: 0.25 });
+  for (const b of BUILTINS) {
+    const [x0, z0, x1, z1] = b.r, w = x1 - x0, d = z1 - z0, h = b.h || 2.1;
+    B(g, w, h, d, (x0 + x1) / 2, 0, (z0 + z1) / 2, body);
+    B(g, w + 0.02, 0.03, d + 0.02, (x0 + x1) / 2, h, (z0 + z1) / 2, new THREE.MeshStandardMaterial({ color: '#a89c86', roughness: 0.7 }));
+    const ax = b.front === 'e' || b.front === 'w', s = b.front === 'e' || b.front === 's' ? 1 : -1;
+    const fx = ax ? (b.front === 'e' ? x1 : x0) + s * 0.004 : (x0 + x1) / 2, fz = ax ? (z0 + z1) / 2 : (b.front === 's' ? z1 : z0) + s * 0.004;
+    const span = ax ? d : w;
+    const seam = new THREE.Mesh(ax ? new THREE.BoxGeometry(0.006, h - 0.1, 0.008) : new THREE.BoxGeometry(0.008, h - 0.1, 0.006), line); seam.position.set(fx, h / 2, fz); g.add(seam);
+    for (const k of [-1, 1]) { const kn = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.25, 0.02), knob); kn.position.set(fx + (ax ? s * 0.012 : k * 0.06), h * 0.5, fz + (ax ? k * 0.06 : s * 0.012)); g.add(kn); }
+  }
   const gl = new THREE.MeshPhysicalMaterial({ color: '#d6ebf2', transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
   const rail = new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: 0.25, metalness: 0.9 });
   // balcony railings + planters

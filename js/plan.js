@@ -84,17 +84,24 @@ export const OPENINGS = [
   { axis: 'z', at: 10.23, a: 20.6, b: 22.4, kind: 'window', sill: 1.05 },
 ];
 export const CUSTOM_WALLS = [];   // user-drawn walls: {axis, fixed, a, b}
+// built-in joinery that belongs to the house (front = side the doors face)
+export const BUILTINS = [
+  { id: 'closet13', name: 'Closet', r: [2.17, 18.67, 2.77, 19.36], h: 2.1, front: 'e' },
+];
 
 // editable plan store: arrays are mutated in place so every importer sees changes
 const clone = o => JSON.parse(JSON.stringify(o));
-export const DEFAULT_PLAN = { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: [] };
+export const DEFAULT_PLAN = { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: [], builtins: clone(BUILTINS) };
 export function setPlan(plan) {
   const src = plan || DEFAULT_PLAN;
   ROOMS.length = 0; ROOMS.push(...clone(src.rooms));
   OPENINGS.length = 0; OPENINGS.push(...clone(src.openings));
   CUSTOM_WALLS.length = 0; CUSTOM_WALLS.push(...clone(src.walls || []));
+  BUILTINS.length = 0; BUILTINS.push(...clone(src.builtins || DEFAULT_PLAN.builtins));
+  // designs saved before the guest-lobby door existed: add it back
+  if (plan && !OPENINGS.some(o => o.axis === 'z' && Math.abs(o.at - 4.11) < 0.05 && o.a > 18.5 && o.b < 19.5)) OPENINGS.push({ axis: 'z', at: 4.11, a: 18.68, b: 19.36, kind: 'door', hinge: 'a', swing: -1 });
 }
-export function getPlan() { return { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: clone(CUSTOM_WALLS) }; }
+export function getPlan() { return { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: clone(CUSTOM_WALLS), builtins: clone(BUILTINS) }; }
 export function measuredDim(r) { const [x0, z0, x1, z1] = r.r; return `${(x1 - x0).toFixed(2)} × ${(z1 - z0).toFixed(2)} m`; }
 
 const EXTERIOR = [

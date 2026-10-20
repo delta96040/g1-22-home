@@ -1,4 +1,4 @@
-import { ROOMS, OPENINGS, STAIR, buildWallPieces } from './plan.js';
+import { ROOMS, OPENINGS, STAIR, BUILTINS, buildWallPieces } from './plan.js';
 import { ITEM } from './catalog.js';
 
 const FILL = { wood: '#ead9c2', walnut: '#cdb59a', marble: '#f3f2ee', stone: '#ece7df', tile: '#e1e5e6', ktile: '#e5ded3', black: '#c9c9cc', terrazzo: '#ece8e0', deck: '#ddcbb4', granite: '#bdbdc2', pebble: '#dad6ce', steel: '#d3d6d8', carpet: '#d8d3ca' };
@@ -48,6 +48,10 @@ export function buildSVG(state, scope) {
       }
     }
   }
+  o.push('</g>');
+  // built-in closets (wardrobe symbol)
+  o.push('<g id="builtins" fill="#efe9de" stroke="#6b6458" stroke-width="1.5">');
+  for (const b of BUILTINS) { const [a, c, d, f] = b.r.map(k); o.push(`<rect x="${a}" y="${c}" width="${d - a}" height="${f - c}"/><line x1="${a}" y1="${c}" x2="${d}" y2="${f}"/><line x1="${d}" y1="${c}" x2="${a}" y2="${f}"/><text x="${(a + d) / 2}" y="${(c + f) / 2 + 4}" font-size="11" text-anchor="middle" fill="#3b3a36" stroke="none" paint-order="stroke">${esc(b.name)}</text>`); }
   o.push('</g>');
   // balcony railings
   o.push('<g id="railings" stroke="#5f5c57" stroke-width="5">');
