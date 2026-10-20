@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>G1-22 Home Planner</title>
+<meta name="description" content="Interactive 3D planner for Plot G1-22, DLF Panchkula. Furnish every room, walk through it, and export to-scale SVG plans.">
+<meta name="theme-color" content="#14181a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d4a24a'/%3E%3Cpath d='M7 16 16 8l9 8v9H7z' fill='none' stroke='%2314181a' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><b>G1-22</b><span>DLF Panchkula</span></div>
+    <div class="seg" id="views" role="group" aria-label="View">
+      <button data-v="orbit" aria-pressed="true">3D</button>
+      <button data-v="plan" aria-pressed="false">Plan</button>
+      <button data-v="walk" aria-pressed="false">Walk</button>
+    </div>
+    <div class="tools" id="tools">
+      <button class="btn" id="walls" title="Wall height: cutaway lowers the walls nearest you">Walls: cutaway</button>
+      <button class="btn" id="snap" aria-pressed="true" title="Snap furniture against walls">Wall snap</button>
+      <button class="btn" id="measure" aria-pressed="false">Measure</button>
+      <button class="btn" id="labelsBtn" aria-pressed="true">Labels</button>
+      <button class="btn" id="quality" aria-pressed="false" title="Ambient occlusion: softer, more realistic shading">Soft shading</button>
+      <button class="btn phone-only" id="helpBtn2">Help</button>
+      <span class="sep"></span>
+      <button class="btn icon" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+      <button class="btn icon" id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+    </div>
+    <div class="right">
+      <button class="btn icon" id="helpBtn" aria-label="Help">?</button>
+      <button class="btn primary" id="exportBtn">Export</button>
+      <button class="btn icon" id="mTools" aria-label="More tools">⋯</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside id="side">
+      <div class="grab" data-sheet-close aria-hidden="true"></div>
+      <nav class="tabs" role="tablist">
+        <button class="tab" data-tab="furniture" aria-selected="true" role="tab">Furniture</button>
+        <button class="tab" data-tab="rooms" aria-selected="false" role="tab">Rooms</button>
+        <button class="tab" data-tab="list" aria-selected="false" role="tab">List</button>
+        <button class="closex" data-sheet-close aria-label="Close panel">×</button>
+      </nav>
+      <section class="pane" id="pane-furniture">
+        <div class="pad">
+          <input id="q" type="search" placeholder="Search beds, TV, AC, mirror, bar…" autocomplete="off">
+          <div class="chips" id="chips"></div>
+        </div>
+        <div class="grid" id="grid"></div>
+      </section>
+      <section class="pane" id="pane-rooms" hidden>
+        <div id="roomDetail" hidden></div>
+        <div class="roomlist" id="roomList"></div>
+      </section>
+      <section class="pane" id="pane-list" hidden>
+        <div class="pad listhead"><span class="lbl" id="listCount"></span></div>
+        <div id="itemList" class="itemlist"></div>
+      </section>
+    </aside>
+
+    <main id="stage">
+      <div id="labels"></div>
+      <div class="hud">
+        <div class="chip mono" id="gaps" hidden></div>
+        <div class="chip" id="hint"></div>
+      </div>
+      <div id="toast" class="toast" hidden></div>
+      <div id="loading"><span></span>Loading the house…</div>
+
+      <section id="insp" hidden aria-label="Selected furniture">
+        <div class="ih">
+          <img id="iThumb" alt="">
+          <div><input id="iName" aria-label="Name"><small id="iCat"></small></div>
+          <button class="x" id="iClose" aria-label="Deselect">×</button>
+        </div>
+        <div class="lbl">Size in cm</div>
+        <div class="fields">
+          <label><span>Width</span><input id="iW" type="number" min="1" step="1" inputmode="numeric"></label>
+          <label><span>Depth</span><input id="iD" type="number" min="1" step="1" inputmode="numeric"></label>
+          <label><span>Height</span><input id="iH" type="number" min="1" step="1" inputmode="numeric"></label>
+          <label><span>Off floor</span><input id="iY" type="number" min="0" step="5" inputmode="numeric"></label>
+        </div>
+        <div class="lbl">Rotation</div>
+        <div class="rotrow">
+          <input id="iRs" type="range" min="0" max="359" step="1" aria-label="Rotation">
+          <input id="iR" type="number" step="15" aria-label="Rotation in degrees">
+        </div>
+        <div class="row"><button class="btn" id="rL">↺ 90°</button><button class="btn" id="rR">↻ 90°</button><button class="btn" id="r15">+15°</button></div>
+        <div class="lbl">Colour</div>
+        <div class="swatches" id="iSw"></div>
+        <div class="row"><input type="color" id="iC" aria-label="Any colour"><button class="btn" id="iCreset">Original colour</button></div>
+        <div class="row">
+          <button class="btn" id="dup">Duplicate</button>
+          <button class="btn" id="ungroup" hidden>Ungroup set</button>
+          <button class="btn danger" id="del">Delete</button>
+        </div>
+      </section>
+
+      <div id="walkUI" hidden>
+        <div id="joy"><div id="knob"></div></div>
+        <button class="btn" id="walkExit">Exit walk</button>
+      </div>
+    </main>
+  </div>
+
+  <nav id="mobileBar">
+    <button data-tab="furniture">＋ Furniture</button>
+    <button data-tab="rooms">Rooms</button>
+    <button data-tab="list">List</button>
+  </nav>
+</div>
+<div class="modal" id="modal" hidden></div>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
