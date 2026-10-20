@@ -181,7 +181,7 @@ const PERIM = p => !p.room || (p.axis === 'z' && (Math.abs(p.fixed - 0.3) < 0.01
 export function buildWalls(mode, paints = {}, view = null) {
   const g = W.groups.walls; g.clear();
   const LOW = 1.1;
-  const H = mode === 'full' || mode === 'auto' ? WALL_H : mode === 'low' ? LOW : 0.06;
+  const H = mode === 'full' || mode === 'auto' ? WALL_H : mode === 'plan' ? 2.05 : mode === 'low' ? LOW : 0.06;
   // auto: perimeter walls whose inside faces the camera stay full height (plus the focused room's back walls); everything else is cut to 1.1 m
   const heightFor = p => {
     if (mode !== 'auto' || !view) return H;
@@ -219,7 +219,7 @@ export function buildWalls(mode, paints = {}, view = null) {
     if (o.kind === 'window' && mode !== 'off') addWindow(g, o, oh);
     if (o.kind === 'slide' && mode !== 'off') addSlider(g, o, oh);
     if (o.kind === 'fixed' && mode !== 'off') addFixed(g, o, oh);
-    if (o.kind === 'door') addDoor(g, o, oh >= 2.5 ? 'full' : mode === 'off' ? 'off' : 'low');
+    if (o.kind === 'door') addDoor(g, o, oh >= 2.0 ? 'full' : mode === 'off' ? 'off' : 'low');
     if (o.liftDoor && mode !== 'off') addLiftDoor(g, o, oh);
   }
   W.wallH = H;

@@ -89,7 +89,7 @@ let faces = [];
 let wallKey = '';
 function camDir() { const dx = W.persp.position.x - W.orbit.target.x, dz = W.persp.position.z - W.orbit.target.z, l = Math.hypot(dx, dz) || 1; return [dx / l, dz / l]; }
 function rebuildWalls() {
-  const mode = view === 'walk' ? 'full' : view === 'plan' && wallMode === 'auto' ? 'full' : wallMode;
+  const mode = view === 'walk' ? 'full' : view === 'plan' && (wallMode === 'auto' || wallMode === 'full') ? 'plan' : wallMode;
   const dir = camDir();
   wallKey = mode + Math.round(Math.atan2(dir[1], dir[0]) / (Math.PI / 8)) + (focusedRoom ? focusedRoom.id : '');
   buildWalls(mode, Object.fromEntries(Object.entries(state.rooms).filter(([, v]) => v.paint).map(([k, v]) => [k, v.paint])), { dir, room: focusedRoom ? focusedRoom.id : null });
