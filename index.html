@@ -22,6 +22,7 @@
       <button data-v="walk" aria-pressed="false">Walk</button>
     </div>
     <div class="tools" id="tools">
+      <button class="btn edit" id="editPlan" aria-pressed="false" title="Change room sizes, walls, doors and windows">Edit plan</button>
       <button class="btn" id="walls" title="Wall height: cutaway lowers the walls nearest you">Walls: cutaway</button>
       <button class="btn" id="snap" aria-pressed="true" title="Snap furniture against walls">Wall snap</button>
       <button class="btn" id="measure" aria-pressed="false">Measure</button>
@@ -102,6 +103,21 @@
           <button class="btn danger" id="del">Delete</button>
         </div>
       </section>
+
+      <div id="editBar" hidden role="toolbar" aria-label="Plan editing tools">
+        <button data-tool="select" aria-pressed="true">Select</button>
+        <button data-tool="wall">+ Wall</button>
+        <button data-tool="door">+ Door</button>
+        <button data-tool="slide">+ Slider</button>
+        <button data-tool="window">+ Window</button>
+        <button data-tool="gap">+ Opening</button>
+        <button data-tool="room">+ Room</button>
+        <button data-tool="erase">Erase</button>
+        <span class="sep"></span>
+        <button id="edReset">Reset plan</button>
+        <button id="edDone" class="done">Done</button>
+      </div>
+      <section id="planInsp" hidden aria-label="Selected plan element"></section>
 
       <div id="walkUI" hidden>
         <div id="joy"><div id="knob"></div></div>

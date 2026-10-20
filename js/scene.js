@@ -121,15 +121,8 @@ export function initWorld(host) {
   const hall = new THREE.Mesh(new THREE.PlaneGeometry(HALL[2] - HALL[0], HALL[3] - HALL[1]), floorMaterial('marble', HALL[2] - HALL[0], HALL[3] - HALL[1]));
   hall.rotation.x = -Math.PI / 2; hall.position.set((HALL[0] + HALL[2]) / 2, 0, (HALL[1] + HALL[3]) / 2); hall.receiveShadow = true; scene.add(hall);
   W.floors.hall = hall;
-  for (const r of ROOMS) {
-    if (!r.floor) continue;
-    const [x0, z0, x1, z1] = r.r;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 0.07, z1 - z0 + 0.07), floorMaterial(r.floor, x1 - x0, z1 - z0));
-    m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.003, (z0 + z1) / 2); m.receiveShadow = true; m.userData.room = r.id;
-    scene.add(m); W.floors[r.id] = m;
-  }
-  W.pieces = buildWallPieces();
-  buildFixtures();
+  W.groups.floors = new THREE.Group(); scene.add(W.groups.floors);
+  rebuildPlanGeometry({});
   buildCeiling();
 
   // post-processing (ambient occlusion)
@@ -143,6 +136,20 @@ export function initWorld(host) {
   return W;
 }
 
+// floors + fixed fixtures + wall pieces from the current (editable) plan
+export function rebuildPlanGeometry(roomState) {
+  const g = W.groups.floors; g.children.forEach(m => m.material.dispose()); g.clear();
+  for (const k of Object.keys(W.floors)) if (k !== 'hall') delete W.floors[k];
+  for (const r of ROOMS) {
+    if (!r.floor) continue;
+    const [x0, z0, x1, z1] = r.r; const type = roomState[r.id]?.floor || r.floor;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 0.07, z1 - z0 + 0.07), floorMaterial(type, x1 - x0, z1 - z0));
+    m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.003, (z0 + z1) / 2); m.receiveShadow = true; m.userData.room = r.id;
+    g.add(m); W.floors[r.id] = m;
+  }
+  W.pieces = buildWallPieces();
+  W.groups.fixtures.clear(); buildFixtures();
+}
 export function setCamera(which) {
   W.cam = which === 'plan' ? W.ortho : W.persp;
   W.ctrl = which === 'plan' ? W.plan : W.orbit;
@@ -177,7 +184,7 @@ function inward(p) {
   if (p.room) return p.axis === 'x' ? [0, p.side] : [p.side, 0];
   return p.fixed < 5 ? [1, 0] : [-1, 0];
 }
-const PERIM = p => !p.room || (p.axis === 'z' && (Math.abs(p.fixed - 0.3) < 0.01 || Math.abs(p.fixed - 10.2) < 0.01)) || (p.axis === 'x' && (Math.abs(p.fixed - 2.0) < 0.01 || Math.abs(p.fixed - 23.65) < 0.01));
+const PERIM = p => (!p.room && p.custom == null) || (p.axis === 'z' && (Math.abs(p.fixed - 0.3) < 0.01 || Math.abs(p.fixed - 10.2) < 0.01)) || (p.axis === 'x' && (Math.abs(p.fixed - 2.0) < 0.01 || Math.abs(p.fixed - 23.65) < 0.01));
 export function buildWalls(mode, paints = {}, view = null) {
   const g = W.groups.walls; g.clear();
   const LOW = 1.1;
@@ -219,6 +226,7 @@ export function buildWalls(mode, paints = {}, view = null) {
     if (o.kind === 'window' && mode !== 'off') addWindow(g, o, oh);
     if (o.kind === 'slide' && mode !== 'off') addSlider(g, o, oh);
     if (o.kind === 'fixed' && mode !== 'off') addFixed(g, o, oh);
+    if (o.kind === 'void') continue;
     if (o.kind === 'door') addDoor(g, o, oh >= 2.0 ? 'full' : mode === 'off' ? 'off' : 'low');
     if (o.liftDoor && mode !== 'off') addLiftDoor(g, o, oh);
   }
@@ -286,7 +294,9 @@ function addLiftDoor(g, o, H) {
 /* ---------------- fixed fixtures: stairs, railings, OTS ---------------- */
 function B(g, w, h, d, x, y, z, m) { const me = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); me.position.set(x, y + h / 2, z); me.castShadow = me.receiveShadow = true; g.add(me); return me; }
 function buildFixtures() {
-  const g = W.groups.fixtures;
+  const st = ROOMS.find(r => r.stairs);
+  if (!st) return buildRoomFixtures(W.groups.fixtures);
+  const g = new THREE.Group(); g.position.set(st.r[0] - 6.5, 0, st.r[1] - 10.5); W.groups.fixtures.add(g);
   const tread = new THREE.MeshStandardMaterial({ color: '#232326', roughness: 0.2, envMapIntensity: 1 });
   const riser = new THREE.MeshStandardMaterial({ color: '#efece6', roughness: 0.7 });
   const { rise, run, f1, f2, landing } = STAIR;
@@ -308,6 +318,11 @@ function buildFixtures() {
     B(g, 0.015, 0.9, run, f2.x0 - 0.01, y2, z2, gl);
   }
   B(g, f2.x0 - f1.x1, 0.9, 0.015, (f1.x1 + f2.x0) / 2, 1.5, landing[3] + 0.01, gl);
+  buildRoomFixtures(W.groups.fixtures);
+}
+function buildRoomFixtures(g) {
+  const gl = new THREE.MeshPhysicalMaterial({ color: '#d6ebf2', transparent: true, opacity: 0.22, roughness: 0.05, depthWrite: false });
+  const rail = new THREE.MeshStandardMaterial({ color: '#c9c3b6', roughness: 0.25, metalness: 0.9 });
   // balcony railings + planters
   const par = new THREE.MeshStandardMaterial({ color: '#e4e0d8', roughness: 0.8 });
   const pot = new THREE.MeshStandardMaterial({ color: '#cfc6b8', roughness: 0.8 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { ROOMS, OPENINGS, PLOT, CENTER, WALL_H, roomAt, wallFaces } from './plan.js';
+import { ROOMS, OPENINGS, PLOT, CENTER, WALL_H, WALL_T, roomAt, wallFaces, setPlan, getPlan, measuredDim, CUSTOM_WALLS, DEFAULT_PLAN } from './plan.js';
 import { ITEMS, ITEM, CATEGORIES, FLOOR_TYPES, PAINTS } from './catalog.js';
-import { W, initWorld, setCamera, resize, render, buildWalls, setFloor, floorMaterial } from './scene.js';
+import { W, initWorld, setCamera, resize, render, buildWalls, setFloor, floorMaterial, rebuildPlanGeometry } from './scene.js';
 import { buildItem, recolor, BUILDERS } from './items.js';
 import { buildSVG } from './export.js';
 
@@ -20,7 +20,7 @@ function snapshot() { return JSON.stringify(state); }
 function commit(prev) { undoStack.push(prev); if (undoStack.length > 80) undoStack.shift(); redoStack.length = 0; save(); updateUndo(); }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { } renderList(); }
 function updateUndo() { $('#undo').disabled = !undoStack.length; $('#redo').disabled = !redoStack.length; }
-async function restore(json) { state = JSON.parse(json); await applyAll(); save(); }
+async function restore(json) { state = JSON.parse(json); esel = null; await applyAll(); if (editOn) drawEditSel(); save(); }
 $('#undo').onclick = async () => { if (!undoStack.length) return; redoStack.push(snapshot()); await restore(undoStack.pop()); select(null); updateUndo(); };
 $('#redo').onclick = async () => { if (!redoStack.length) return; undoStack.push(snapshot()); await restore(redoStack.pop()); select(null); updateUndo(); };
 
@@ -101,7 +101,7 @@ function maybeRebuildWalls() {
   if (key !== wallKey) rebuildWalls();
 }
 async function applyAll() {
-  for (const r of ROOMS) { if (!r.floor) continue; const t = state.rooms[r.id]?.floor; setFloor(r.id, t || r.floor); }
+  setPlan(state.plan || null); rebuildPlanGeometry(state.rooms); buildRoomLabels();
   const hm = W.floors.hall; hm.material.dispose(); hm.material = floorMaterial(state.hallFloor || 'marble', 10.26, 21.79);
   rebuildWalls();
   W.groups.items.clear(); objs.clear();
@@ -121,14 +121,18 @@ const groupOf = it => it.g ? state.items.filter(i => i.g === it.g) : [it];
 
 /* ======================= labels overlay ======================= */
 const overlay = $('#labels');
-const roomLabels = ROOMS.filter(r => !r.noLabel).map(r => {
-  const el = document.createElement('div'); el.className = 'rlabel';
-  el.innerHTML = `<i>${r.id}</i><b>${r.name}</b><span>${r.dim}</span>`; el.title = `${r.id} · ${r.name} · ${r.dim}`;
-  el.onclick = () => focusRoom(r.id);
-  overlay.appendChild(el);
-  const [x0, z0, x1, z1] = r.r;
-  return { el, p: new THREE.Vector3((x0 + x1) / 2, r.stairs ? 1.6 : 0.1, (z0 + z1) / 2), a: new THREE.Vector3(x0, 0, (z0 + z1) / 2), b: new THREE.Vector3(x1, 0, (z0 + z1) / 2), area: (x1 - x0) * (z1 - z0), r, mode: '' };
-}).sort((p, q) => q.area - p.area);
+let roomLabels = [];
+function buildRoomLabels() {
+  roomLabels.forEach(L => L.el.remove());
+  roomLabels = ROOMS.filter(r => !r.noLabel).map(r => {
+    const el = document.createElement('div'); el.className = 'rlabel';
+    el.innerHTML = `<i></i><b></b><span></span>`; el.querySelector('i').textContent = r.id; el.querySelector('b').textContent = r.name; el.querySelector('span').textContent = r.dim; el.title = `${r.id} · ${r.name} · ${r.dim}`;
+    el.onclick = () => { if (editOn) { esel = { type: 'room', ref: r }; drawEditSel(); } else focusRoom(r.id); };
+    overlay.appendChild(el);
+    const [x0, z0, x1, z1] = r.r;
+    return { el, p: new THREE.Vector3((x0 + x1) / 2, r.stairs ? 1.6 : 0.1, (z0 + z1) / 2), a: new THREE.Vector3(x0, 0, (z0 + z1) / 2), b: new THREE.Vector3(x1, 0, (z0 + z1) / 2), area: (x1 - x0) * (z1 - z0), r, mode: '' };
+  }).sort((p, q) => q.area - p.area);
+}
 let labelsOn = true;
 const tmpV = new THREE.Vector3();
 function toScreen(p) { tmpV.copy(p).project(W.cam); return { x: (tmpV.x + 1) / 2 * stage.clientWidth, y: (1 - tmpV.y) / 2 * stage.clientHeight, ok: tmpV.z < 1 && tmpV.z > -1 }; }
@@ -316,6 +320,7 @@ let down = null, drag = null;
 stage.addEventListener('pointerdown', e => {
   if (e.target !== W.renderer.domElement || view === 'walk' || e.button > 0) return;
   down = { x: e.clientX, y: e.clientY };
+  if (editOn) { edDown(e); return; }
   if (measureOn) return;
   const it = pick(e);
   if (it) {
@@ -328,6 +333,7 @@ stage.addEventListener('pointerdown', e => {
   }
 }, { capture: true });
 window.addEventListener('pointermove', e => {
+  if (editOn) { edMove(e); return; }
   if (!drag) { hoverCursor(e); return; }
   const p = floorAt(e); if (!p) return;
   const dx = p.x - drag.p0.x, dz = p.z - drag.p0.z;
@@ -343,6 +349,7 @@ window.addEventListener('pointermove', e => {
   refreshSelection(); fillInspector();
 });
 window.addEventListener('pointerup', e => {
+  if (editOn) { edUp(e); return; }
   if (drag) {
     if (drag.moved) commit(drag.prev);
     drag = null; W.orbit.enabled = view === 'orbit'; W.plan.enabled = view === 'plan'; stage.classList.remove('dragging'); down = null; return;
@@ -491,7 +498,7 @@ window.addEventListener('keydown', e => {
   if (view === 'walk') { walk.keys[e.code] = true; if (e.code === 'Escape' && !document.pointerLockElement) setView('orbit'); if (e.code.startsWith('Arrow')) e.preventDefault(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('#redo') : $('#undo')).click(); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); $('#redo').click(); return; }
-  if (!selected) return;
+  if (!selected || editOn) return;
   if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSel(); }
   else if (e.key === 'r' || e.key === 'R') rotateSel(e.shiftKey ? -90 : 90);
   else if (e.key === 'Escape') select(null);
@@ -728,12 +735,223 @@ $('#helpBtn').onclick = () => openModal(`<h2>How to use</h2>
     <li><b>Move</b>: drag any piece. Beds, sofas, wardrobes, TVs, ACs, kitchen and bath fittings snap flat against the nearest wall and turn to face the room. Hold Alt to skip snapping.</li>
     <li><b>Edit</b>: tap a piece to set its exact size in cm, height off the floor, rotation and colour. Dashed lines show the gap to each wall.</li>
     <li><b>Rooms</b>: pick a room to zoom in, change its floor and wall paint, walk in, or export its plan.</li>
+    <li><b>Edit plan</b>: resize rooms by dragging their gold handles or typing sizes, draw new walls, add or remove doors, windows and openings, add or delete rooms. Reset plan restores the brochure layout.</li>
     <li><b>Views</b>: 3D to orbit, Plan for a flat to-scale layout, Walk to stroll through at eye level.</li>
     <li><b>Keys</b>: R rotate · Shift+R rotate back · arrows nudge 1 cm (Shift for 10 cm) · Delete remove · Ctrl+D duplicate · Ctrl+Z undo.</li>
     <li><b>Saving</b>: your design saves in this browser automatically. Use Export to save a file, share a link, or download SVG plans.</li>
   </ul>
   <p>Room positions are traced from the DLF / Bhagwati brochure; labels show the brochure sizes. Furniture models: Kenney Furniture Kit (CC0).</p>
   <div class="row end"><button class="btn primary" data-close>Got it</button></div>`);
+
+/* ======================= plan editor ======================= */
+let editOn = false, tool = 'select', esel = null, edDrag = null, edLabels = [];
+const edGroup = new THREE.Group(); W.groups.helpers.add(edGroup);
+const SNAP = 0.05, snapv = v => Math.round(v / SNAP) * SNAP;
+const OPEN_W = { door: 0.9, slide: 2.0, window: 1.2, gap: 1.0, fixed: 1.5 };
+const TOOL_HINT = {
+  select: 'Tap a room, wall or door to edit it. Drag the gold handles to resize a room.',
+  wall: 'Drag across the plan to draw a new wall (it snaps straight).',
+  door: 'Tap on a wall to put a door there.', slide: 'Tap on a wall to put a sliding glass door there.',
+  window: 'Tap on a wall to put a window there.', gap: 'Tap on a wall to cut an open doorway.',
+  room: 'Drag a rectangle to add a new room.', erase: 'Tap a wall or door to remove it.',
+};
+const along = (axis, p) => axis === 'x' ? p.x : p.z, perp = (axis, p) => axis === 'x' ? p.z : p.x;
+function edLabel(text, p) { const el = document.createElement('div'); el.className = 'dlabel h'; el.textContent = text; overlay.appendChild(el); const d = { el, p: p.clone() }; dimLabels.push(d); edLabels.push(d); }
+function clearEd() { edGroup.clear(); edLabels.forEach(d => { d.el.remove(); dimLabels = dimLabels.filter(x => x !== d); }); edLabels = []; }
+const edMat = () => new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.45, depthTest: false });
+function edBox(x0, z0, x1, z1, y, h, op = 0.45) { const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.02, x1 - x0), h, Math.max(0.02, z1 - z0)), edMat()); m.material.opacity = op; m.position.set((x0 + x1) / 2, y + h / 2, (z0 + z1) / 2); m.renderOrder = 30; edGroup.add(m); return m; }
+function pieceRect(p) { const h = p.t / 2; return p.axis === 'x' ? [p.a, p.fixed - h, p.b, p.fixed + h] : [p.fixed - h, p.a, p.fixed + h, p.b]; }
+function openRect(o) { return o.axis === 'x' ? [o.a, o.at - 0.12, o.b, o.at + 0.12] : [o.at - 0.12, o.a, o.at + 0.12, o.b]; }
+
+function drawEditSel() {
+  clearEd(); fillPlanInsp();
+  if (!esel) return;
+  if (esel.type === 'room') {
+    const [x0, z0, x1, z1] = esel.ref.r;
+    const pts = [[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]].map(([x, z]) => new THREE.Vector3(x, 0.06, z));
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: accent, depthTest: false })); l.renderOrder = 30; edGroup.add(l);
+    edBox(x0, z0, x1, z1, 0.02, 0.01, 0.12);
+    const hs = 0.16;
+    [[(x0 + x1) / 2, z0], [(x0 + x1) / 2, z1], [x0, (z0 + z1) / 2], [x1, (z0 + z1) / 2]].forEach(([x, z]) => edBox(x - hs, z - hs, x + hs, z + hs, 0.05, 0.08, 0.95));
+    edLabel(`${cm(x1 - x0)} cm`, new THREE.Vector3((x0 + x1) / 2, 0.1, z0 + 0.35));
+    edLabel(`${cm(z1 - z0)} cm`, new THREE.Vector3(x0 + 0.45, 0.1, (z0 + z1) / 2));
+  } else if (esel.type === 'wall') {
+    const [a, b, c, d] = pieceRect(esel.ref); edBox(a - 0.03, b - 0.03, c + 0.03, d + 0.03, 0, 3.05, 0.5);
+    edLabel(`${cm(esel.ref.b - esel.ref.a)} cm`, new THREE.Vector3((a + c) / 2, 0.2, (b + d) / 2));
+  } else if (esel.type === 'opening') {
+    const [a, b, c, d] = openRect(esel.ref); edBox(a, b, c, d, 0, 2.2, 0.5);
+    edLabel(`${cm(esel.ref.b - esel.ref.a)} cm`, new THREE.Vector3((a + c) / 2, 0.2, (b + d) / 2));
+  }
+}
+function pickPlan(p) {
+  for (const o of OPENINGS) { if (o.kind === 'void') continue; if (Math.abs(perp(o.axis, p) - o.at) < 0.22 && along(o.axis, p) >= o.a && along(o.axis, p) <= o.b) return { type: 'opening', ref: o }; }
+  for (const w of W.pieces) { if (w.y0 > 0.05) continue; if (Math.abs(perp(w.axis, p) - w.fixed) < w.t / 2 + 0.1 && along(w.axis, p) >= w.a && along(w.axis, p) <= w.b) return { type: 'wall', ref: w }; }
+  const rooms = ROOMS.filter(r => p.x >= r.r[0] && p.x <= r.r[2] && p.z >= r.r[1] && p.z <= r.r[3]).sort((a, b) => (a.r[2] - a.r[0]) * (a.r[3] - a.r[1]) - (b.r[2] - b.r[0]) * (b.r[3] - b.r[1]));
+  return rooms[0] ? { type: 'room', ref: rooms[0] } : null;
+}
+function planChanged(prev) {
+  state.plan = getPlan();
+  rebuildPlanGeometry(state.rooms); rebuildWalls(); buildRoomLabels();
+  if (esel && esel.type === 'wall') esel = null;   // wall pieces are regenerated
+  drawEditSel(); if (prev) commit(prev);
+}
+function nearEdge(r, p) {
+  const [x0, z0, x1, z1] = r.r, t = 0.25;
+  const inX = p.x > x0 - t && p.x < x1 + t, inZ = p.z > z0 - t && p.z < z1 + t;
+  if (inX && Math.abs(p.z - z0) < t) return 'n'; if (inX && Math.abs(p.z - z1) < t) return 's';
+  if (inZ && Math.abs(p.x - x0) < t) return 'w'; if (inZ && Math.abs(p.x - x1) < t) return 'e';
+  return null;
+}
+function lockControls(on) { W.orbit.enabled = !on && view === 'orbit'; W.plan.enabled = !on && view === 'plan'; }
+function edDown(e) {
+  const p = floorAt(e); if (!p) return;
+  if (tool === 'select' && esel?.type === 'room') {
+    const edge = nearEdge(esel.ref, p);
+    if (edge) {
+      const r = esel.ref, idx = { n: 1, s: 3, w: 0, e: 2 }[edge], axis = edge === 'n' || edge === 's' ? 'x' : 'z', pos = r.r[idx];
+      const span = axis === 'x' ? [r.r[0], r.r[2]] : [r.r[1], r.r[3]];
+      const attached = OPENINGS.filter(o => o.axis === axis && Math.abs(o.at - pos) < 0.22 && o.a >= span[0] - 0.1 && o.b <= span[1] + 0.1).map(o => ({ o, d: o.at - pos }));
+      edDrag = { kind: 'edge', r, idx, axis, attached, prev: snapshot() }; lockControls(true); return;
+    }
+  }
+  if (tool === 'select' && esel?.type === 'opening') {
+    const o = esel.ref;
+    if (Math.abs(perp(o.axis, p) - o.at) < 0.3 && along(o.axis, p) >= o.a - 0.1 && along(o.axis, p) <= o.b + 0.1) { edDrag = { kind: 'opening', o, off: along(o.axis, p) - o.a, prev: snapshot() }; lockControls(true); return; }
+  }
+  if (tool === 'wall' || tool === 'room') { edDrag = { kind: tool, start: new THREE.Vector3(snapv(p.x), 0, snapv(p.z)), prev: snapshot() }; lockControls(true); }
+}
+function edMove(e) {
+  if (!edDrag) return;
+  const p = floorAt(e); if (!p) return; edDrag.moved = true;
+  if (edDrag.kind === 'edge') {
+    const r = edDrag.r, v = snapv(edDrag.idx % 2 === 0 ? p.x : p.z);
+    const min = 0.6; if (edDrag.idx === 0) r.r[0] = Math.min(v, r.r[2] - min); else if (edDrag.idx === 2) r.r[2] = Math.max(v, r.r[0] + min); else if (edDrag.idx === 1) r.r[1] = Math.min(v, r.r[3] - min); else r.r[3] = Math.max(v, r.r[1] + min);
+    r.dim = measuredDim(r);
+    edDrag.attached.forEach(({ o, d }) => o.at = r.r[edDrag.idx] + d);
+    drawEditSel();
+  } else if (edDrag.kind === 'opening') {
+    const o = edDrag.o, w = o.b - o.a; o.a = snapv(along(o.axis, p) - edDrag.off); o.b = o.a + w; drawEditSel();
+  } else {
+    clearEd(); const s = edDrag.start, q = new THREE.Vector3(snapv(p.x), 0, snapv(p.z));
+    if (edDrag.kind === 'wall') {
+      const horiz = Math.abs(q.x - s.x) >= Math.abs(q.z - s.z);
+      const a = horiz ? Math.min(s.x, q.x) : Math.min(s.z, q.z), b = horiz ? Math.max(s.x, q.x) : Math.max(s.z, q.z);
+      edDrag.wall = horiz ? { axis: 'x', fixed: s.z, a, b } : { axis: 'z', fixed: s.x, a, b };
+      const [x0, z0, x1, z1] = pieceRect({ ...edDrag.wall, t: WALL_T }); edBox(x0, z0, x1, z1, 0, 1.2, 0.6);
+      edLabel(`${cm(b - a)} cm`, new THREE.Vector3((x0 + x1) / 2, 1.4, (z0 + z1) / 2));
+    } else {
+      edDrag.rect = [Math.min(s.x, q.x), Math.min(s.z, q.z), Math.max(s.x, q.x), Math.max(s.z, q.z)];
+      const [x0, z0, x1, z1] = edDrag.rect; edBox(x0, z0, x1, z1, 0.02, 0.05, 0.3);
+      edLabel(`${cm(x1 - x0)} × ${cm(z1 - z0)} cm`, new THREE.Vector3((x0 + x1) / 2, 0.2, (z0 + z1) / 2));
+    }
+  }
+}
+function edUp(e) {
+  const d = edDrag; edDrag = null; lockControls(false);
+  if (d) {
+    if (!d.moved) { if (d.kind === 'wall' || d.kind === 'room') { clearEd(); drawEditSel(); } else { down = null; return; } }
+    else if (d.kind === 'wall') { if (d.wall && d.wall.b - d.wall.a >= 0.3) { CUSTOM_WALLS.push(d.wall); setTool('select'); planChanged(d.prev); toast('Wall added. Tap it to change or delete it.'); } else drawEditSel(); down = null; return; }
+    else if (d.kind === 'room') {
+      const R = d.rect; if (R && R[2] - R[0] >= 0.8 && R[3] - R[1] >= 0.8) {
+        const id = String(Math.max(20, ...ROOMS.map(r => parseInt(r.id) || 0)) + 1);
+        const nr = { id, name: 'New room', dim: '', r: R, floor: 'stone', walls: true }; nr.dim = measuredDim(nr);
+        ROOMS.push(nr); esel = { type: 'room', ref: nr }; setTool('select'); planChanged(d.prev); toast(`Room ${id} added. Rename it and set its size on the right.`);
+      } else drawEditSel();
+      down = null; return;
+    }
+    else { planChanged(d.prev); down = null; return; }
+  }
+  if (!down || e.target !== W.renderer.domElement) { down = null; return; }
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6; down = null; if (moved) return;
+  const p = floorAt(e); if (!p) return;
+  const hit = pickPlan(p);
+  if (tool === 'select') { esel = hit; drawEditSel(); return; }
+  if (tool === 'erase') { if (hit && hit.type !== 'room') { esel = hit; deletePlanSel(); } else toast('Tap directly on a wall or a door to remove it.'); return; }
+  if (OPEN_W[tool]) {
+    const w = hit && hit.type === 'wall' ? hit.ref : null;
+    if (!w) { toast('Tap directly on a wall.'); return; }
+    const prev = snapshot(), width = Math.min(OPEN_W[tool], w.b - w.a - 0.1), c = along(w.axis, p);
+    const a = snapv(Math.max(w.a + 0.05, Math.min(w.b - 0.05 - width, c - width / 2)));
+    const o = { axis: w.axis, at: w.fixed, a, b: +(a + width).toFixed(3), kind: tool };
+    if (tool === 'door') { o.hinge = 'a'; o.swing = (perp(w.axis, p) - w.fixed) >= 0 ? 1 : -1; }
+    if (tool === 'window') o.sill = 0.9;
+    OPENINGS.push(o); esel = { type: 'opening', ref: o }; setTool('select'); planChanged(prev);
+  }
+}
+function deletePlanSel() {
+  if (!esel) return; const prev = snapshot();
+  if (esel.type === 'opening') OPENINGS.splice(OPENINGS.indexOf(esel.ref), 1);
+  else if (esel.type === 'wall') { const w = esel.ref; if (w.custom != null) CUSTOM_WALLS.splice(w.custom, 1); else OPENINGS.push({ axis: w.axis, at: w.fixed, a: w.a, b: w.b, kind: 'void' }); }
+  else if (esel.type === 'room') { const i = ROOMS.indexOf(esel.ref); if (i >= 0) ROOMS.splice(i, 1); delete state.rooms[esel.ref.id]; }
+  esel = null; planChanged(prev);
+}
+function setTool(t) { tool = t; $$('#editBar [data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t)); hint(TOOL_HINT[t]); }
+$$('#editBar [data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+function setEdit(on) {
+  editOn = on; $('#editPlan').setAttribute('aria-pressed', on); $('#editBar').hidden = !on;
+  if (on) { select(null); if (measureOn) $('#measure').click(); setView('plan'); setTool('select'); stage.classList.add('editing'); }
+  else { esel = null; clearEd(); $('#planInsp').hidden = true; stage.classList.remove('editing'); hint(); }
+}
+$('#editPlan').onclick = () => setEdit(!editOn);
+$('#edDone').onclick = () => setEdit(false);
+$('#edReset').onclick = () => openModal(`<h2>Reset the floor plan?</h2><p>This puts every room, wall, door and window back to the brochure layout. Your furniture stays where it is.</p>
+  <div class="row"><button class="btn primary" id="okReset">Reset plan</button><button class="btn" data-close>Cancel</button></div>`) || ($('#okReset').onclick = () => { const prev = snapshot(); setPlan(DEFAULT_PLAN); esel = null; planChanged(prev); closeModal(); });
+
+/* plan inspector */
+const pin = $('#planInsp');
+function fillPlanInsp() {
+  if (!editOn || !esel) { pin.hidden = true; return; }
+  pin.hidden = false;
+  const s = esel;
+  if (s.type === 'room') {
+    const r = s.ref, [x0, z0, x1, z1] = r.r;
+    pin.innerHTML = `<div class="ih2"><span class="no">${esc(r.id)}</span><input id="pName" value="${esc(r.name)}" aria-label="Room name"><button class="x" id="pClose" aria-label="Close">×</button></div>
+      <div class="lbl">Size in cm</div>
+      <div class="fields f2"><label><span>Width</span><input id="pW" type="number" step="1" value="${cm(x1 - x0)}"></label><label><span>Depth</span><input id="pD" type="number" step="1" value="${cm(z1 - z0)}"></label>
+      <label><span>Left edge (m)</span><input id="pX" type="number" step="0.05" value="${x0.toFixed(2)}"></label><label><span>Top edge (m)</span><input id="pZ" type="number" step="0.05" value="${z0.toFixed(2)}"></label></div>
+      <label class="lbl" for="pDim">Label size text</label><input id="pDim" class="txt" value="${esc(r.dim)}">
+      <label class="chk"><input type="checkbox" id="pWalls" ${r.walls ? 'checked' : ''}> Walls around this room</label>
+      <p class="note">${(cm(x1 - x0) * cm(z1 - z0) / 10000 * 10.7639).toFixed(0)} sq ft · drag the gold handles on the plan to resize</p>
+      <div class="row"><button class="btn danger" id="pDel">Delete room</button></div>`;
+    const upd = fn => { const prev = snapshot(); fn(); planChanged(prev); };
+    $('#pName').onchange = e => upd(() => r.name = e.target.value.trim() || 'Room');
+    $('#pDim').onchange = e => upd(() => r.dim = e.target.value.trim());
+    $('#pW').onchange = e => { const v = parseFloat(e.target.value) / 100; if (v >= 0.6) upd(() => { r.r[2] = r.r[0] + v; r.dim = measuredDim(r); }); };
+    $('#pD').onchange = e => { const v = parseFloat(e.target.value) / 100; if (v >= 0.6) upd(() => { r.r[3] = r.r[1] + v; r.dim = measuredDim(r); }); };
+    $('#pX').onchange = e => { const v = parseFloat(e.target.value); if (isFinite(v)) upd(() => { const w = r.r[2] - r.r[0]; r.r[0] = v; r.r[2] = v + w; }); };
+    $('#pZ').onchange = e => { const v = parseFloat(e.target.value); if (isFinite(v)) upd(() => { const d = r.r[3] - r.r[1]; r.r[1] = v; r.r[3] = v + d; }); };
+    $('#pWalls').onchange = e => upd(() => r.walls = e.target.checked);
+    $('#pDel').onclick = deletePlanSel;
+  } else if (s.type === 'wall') {
+    const w = s.ref, owner = w.room ? ROOMS.find(r => r.id === w.room) : null;
+    pin.innerHTML = `<div class="ih2"><span class="no">▮</span><h3>Wall · ${cm(w.b - w.a)} cm</h3><button class="x" id="pClose" aria-label="Close">×</button></div>
+      <p class="note">${w.custom != null ? 'A wall you drew.' : owner ? `Part of ${esc(owner.id + ' ' + owner.name)}.` : 'Outer wall of the house.'} Add an opening here or remove this stretch of wall.</p>
+      <div class="row"><button class="btn" data-add="door">+ Door</button><button class="btn" data-add="slide">+ Sliding door</button><button class="btn" data-add="window">+ Window</button><button class="btn" data-add="gap">+ Opening</button></div>
+      <div class="row"><button class="btn danger" id="pDel">Remove this wall</button></div>`;
+    pin.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { setTool(b.dataset.add); toast('Now tap the spot on the wall.'); });
+    $('#pDel').onclick = deletePlanSel;
+  } else {
+    const o = s.ref;
+    pin.innerHTML = `<div class="ih2"><span class="no">⌂</span><h3>${{ door: 'Door', slide: 'Sliding door', window: 'Window', gap: 'Opening', fixed: 'Fixed glass' }[o.kind] || 'Opening'}</h3><button class="x" id="pClose" aria-label="Close">×</button></div>
+      <label class="lbl" for="pKind">Type</label><select id="pKind" class="btn"><option value="door">Door</option><option value="slide">Sliding glass door</option><option value="window">Window</option><option value="gap">Open doorway</option><option value="fixed">Fixed glass</option></select>
+      <div class="fields f2"><label><span>Width cm</span><input id="pOW" type="number" step="1" value="${cm(o.b - o.a)}"></label>
+      ${o.kind === 'window' ? `<label><span>Sill height cm</span><input id="pSill" type="number" step="5" value="${cm(o.sill || 0.9)}"></label>` : ''}</div>
+      ${o.kind === 'door' ? `<div class="row"><button class="btn" id="pHinge">Flip hinge side</button><button class="btn" id="pSwing">Flip swing direction</button></div>` : ''}
+      <p class="note">Drag it along the wall on the plan to move it.</p>
+      <div class="row"><button class="btn danger" id="pDel">Remove</button></div>`;
+    $('#pKind').value = o.kind;
+    const upd = fn => { const prev = snapshot(); fn(); planChanged(prev); };
+    $('#pKind').onchange = e => upd(() => { o.kind = e.target.value; if (o.kind === 'door') { o.hinge = o.hinge || 'a'; o.swing = o.swing || 1; } if (o.kind === 'window') o.sill = o.sill || 0.9; });
+    $('#pOW').onchange = e => { const v = parseFloat(e.target.value) / 100; if (v >= 0.3) upd(() => { const c = (o.a + o.b) / 2; o.a = +(c - v / 2).toFixed(3); o.b = +(c + v / 2).toFixed(3); }); };
+    if ($('#pSill')) $('#pSill').onchange = e => { const v = parseFloat(e.target.value) / 100; if (v >= 0 && v < 2) upd(() => o.sill = v); };
+    if ($('#pHinge')) $('#pHinge').onclick = () => upd(() => o.hinge = o.hinge === 'a' ? 'b' : 'a');
+    if ($('#pSwing')) $('#pSwing').onclick = () => upd(() => o.swing = -(o.swing || 1));
+    $('#pDel').onclick = deletePlanSel;
+  }
+  $('#pClose').onclick = () => { esel = null; drawEditSel(); };
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+window.addEventListener('keydown', e => { if (editOn && esel && (e.key === 'Delete' || e.key === 'Backspace') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); deletePlanSel(); } });
 
 /* ======================= loop ======================= */
 const ro = new ResizeObserver(() => resize(stage.clientWidth, stage.clientHeight)); ro.observe(stage);

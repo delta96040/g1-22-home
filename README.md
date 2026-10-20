@@ -11,6 +11,7 @@ Interactive 3D planner for **Plot G1-22, DLF Panchkula**. Furnish every room, wa
 - Drag to place; furniture snaps flat against walls and shows its clearance to each wall in cm
 - Exact sizes, height off the floor, rotation and colour for every piece
 - Per-room floor finish and wall paint
+- Plan editor: resize rooms, draw or remove walls, add or move doors, sliding doors, windows and openings, add or delete rooms
 - Export SVG plans (whole floor or one room, 1 unit = 1 cm), PNG snapshots, a furniture list (CSV), design files and share links
 - Undo/redo; designs save automatically in your browser
 

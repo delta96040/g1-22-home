@@ -83,6 +83,20 @@ export const OPENINGS = [
   { axis: 'z', at: 10.23, a: 17.4, b: 18.6, kind: 'window', sill: 0.9 },
   { axis: 'z', at: 10.23, a: 20.6, b: 22.4, kind: 'window', sill: 1.05 },
 ];
+export const CUSTOM_WALLS = [];   // user-drawn walls: {axis, fixed, a, b}
+
+// editable plan store: arrays are mutated in place so every importer sees changes
+const clone = o => JSON.parse(JSON.stringify(o));
+export const DEFAULT_PLAN = { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: [] };
+export function setPlan(plan) {
+  const src = plan || DEFAULT_PLAN;
+  ROOMS.length = 0; ROOMS.push(...clone(src.rooms));
+  OPENINGS.length = 0; OPENINGS.push(...clone(src.openings));
+  CUSTOM_WALLS.length = 0; CUSTOM_WALLS.push(...clone(src.walls || []));
+}
+export function getPlan() { return { rooms: clone(ROOMS), openings: clone(OPENINGS), walls: clone(CUSTOM_WALLS) }; }
+export function measuredDim(r) { const [x0, z0, x1, z1] = r.r; return `${(x1 - x0).toFixed(2)} × ${(z1 - z0).toFixed(2)} m`; }
+
 const EXTERIOR = [
   { axis: 'z', fixed: 0.24, a: 1.93, b: 23.72, t: EXT_T, room: null },
   { axis: 'z', fixed: 10.26, a: 1.93, b: 23.72, t: EXT_T, room: null },
@@ -106,12 +120,13 @@ export function buildWallPieces() {
   for (const r of ROOMS) {
     if (!r.walls) continue;
     const [x0, z0, x1, z1] = r.r, e = WALL_T / 2;
-    lines.push({ axis: 'x', fixed: z0, a: x0 - e, b: x1 + e, t: WALL_T, room: r.id, side: 1 });
-    lines.push({ axis: 'x', fixed: z1, a: x0 - e, b: x1 + e, t: WALL_T, room: r.id, side: -1 });
-    lines.push({ axis: 'z', fixed: x0, a: z0, b: z1, t: WALL_T, room: r.id, side: 1 });
-    lines.push({ axis: 'z', fixed: x1, a: z0, b: z1, t: WALL_T, room: r.id, side: -1 });
+    lines.push({ axis: 'x', fixed: z0, a: x0 - e, b: x1 + e, t: WALL_T, room: r.id, side: 1, edge: 'n' });
+    lines.push({ axis: 'x', fixed: z1, a: x0 - e, b: x1 + e, t: WALL_T, room: r.id, side: -1, edge: 's' });
+    lines.push({ axis: 'z', fixed: x0, a: z0, b: z1, t: WALL_T, room: r.id, side: 1, edge: 'w' });
+    lines.push({ axis: 'z', fixed: x1, a: z0, b: z1, t: WALL_T, room: r.id, side: -1, edge: 'e' });
   }
   for (const ex of EXTERIOR) lines.push({ ...ex });
+  CUSTOM_WALLS.forEach((w, i) => lines.push({ axis: w.axis, fixed: w.fixed, a: w.a, b: w.b, t: w.t || WALL_T, room: null, custom: i, side: 1 }));
   for (const ln of lines) {
     let parts = [[ln.a, ln.b]];
     const hits = [];
@@ -124,6 +139,7 @@ export function buildWallPieces() {
     for (const [p, q] of parts) if (q - p > 0.02) pieces.push({ ...ln, a: p, b: q, y0: 0, y1: WALL_H });
     for (const o of hits) {
       const a = Math.max(o.a, ln.a), b = Math.min(o.b, ln.b);
+      if (o.kind === 'void') continue;
       if (o.kind === 'window') {
         pieces.push({ ...ln, a, b, y0: 0, y1: o.sill, part: 'sill' });
         pieces.push({ ...ln, a, b, y0: DOOR_H, y1: WALL_H, part: 'head' });
